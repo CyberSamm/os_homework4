@@ -21,7 +21,7 @@ void* ParallelScheduler::thread ( void* arg){
 	ParallelScheduler* scheduler = (ParallelScheduler*) arg;
 	
 	pthread_mutex_lock(&scheduler->my_mutex); // mutex lock
-	while(!scheduler->functions.empty()) {
+	while(scheduler->functions.empty()) {
 		// WAIT
 		pthread_cond_wait(&scheduler->my_cond, &scheduler->my_mutex);
 	}
