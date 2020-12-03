@@ -1,15 +1,20 @@
-#include <iostream>
-#include <vector>
-#include <pthread.h>
 #include "ParallelScheduler.h"
+#include <signal.h>
+#include <iostream>
 
-
-ParallelScheduler::ParallelScheduler (int count)
-	: numOfFuncs{count}
-	, tid { new pthread_t[numOfFuncs] }
+ParallelScheduler::ParallelScheduler (int capacity)
+	: capacity(capacity)
 {
-	for(int i = 0; i < numOfFuncs; ++i){
-		int threadCreated = pthread_create(&tid[i], NULL, thread, this);
+	this->threads = new pthread_t[this->capacity];
+	this->queueLock = new pthread_mutex_t(); 
+	this->hasFunction  = new pthread_cond_t();
+
+	pthread_mutex_init(this->queueLock, NULL);
+	pthread_cond_init(this->hasFunction, NULL);
+	
+	for(int i = 0; i < this->capacity; ++i){
+		
+		int threadCreated = pthread_create(&threads[i], NULL, execute, this);
 		
 		if(threadCreated != 0){
 			std::cerr << "Something wrong with ctreating thread!\n";
@@ -17,47 +22,54 @@ ParallelScheduler::ParallelScheduler (int count)
 	}
 };
 
-void* ParallelScheduler::thread ( void* arg){
-	ParallelScheduler* scheduler = (ParallelScheduler*) arg;
-	
-	pthread_mutex_lock(&scheduler->my_mutex); // mutex lock
-	while(scheduler->functions.empty()) {
-		// WAIT
-		pthread_cond_wait(&scheduler->my_cond, &scheduler->my_mutex);
-	}
-	
-	// run function
-	scheduler->functions.back().first(scheduler->functions.back().second);
-	scheduler->functions.pop_back();
-	
-	
-	pthread_mutex_unlock(&scheduler->my_mutex);
+void* ParallelScheduler::execute ( void* arg){
+
+	ParallelScheduler* scheduler = (ParallelScheduler*)arg;
+	while(true){
 		
+		pthread_mutex_lock(scheduler->queueLock); // mutex lock
+		
+		while(scheduler->functions.empty()) {
+			// WAIT
+			pthread_cond_wait(scheduler->hasFunction, scheduler->queueLock);
+		}
+		
+		auto funcPair = scheduler->functions.front();
+		scheduler->functions.pop();
+		
+		pthread_mutex_unlock(scheduler->queueLock);
+		
+		funcPair.first(funcPair.second); // run function
+	}
 	return NULL;
 }
 
-void ParallelScheduler::run(void (*func)(void*), void* arg){
-	ParallelScheduler* scheduler = (ParallelScheduler*) arg;
-	
-	pthread_mutex_lock(&scheduler->my_mutex);
-	
-	
-	
-	// add function
-	functions.push_back( std::make_pair(func, arg) );
+void ParallelScheduler::run(scheduler_fn_t func, void* arg){
 
+	pthread_mutex_lock(this->queueLock);
 	
+	// add a function
+	this->functions.push( std::make_pair(func, arg) );
+
+	pthread_mutex_unlock(this->queueLock);
 	
-	pthread_mutex_unlock(&scheduler->my_mutex);
-	
-	pthread_cond_broadcast(&scheduler->my_cond);
-	
+	pthread_cond_signal(this->hasFunction);
 }
 
 
 ParallelScheduler::~ParallelScheduler() {
 
-	for(int i = 0; i < numOfFuncs; ++i){
-		pthread_join(tid[i], NULL); // or pthread_cancel(tid[i]);
+	for(int i = 0; i < this->capacity; ++i){
+		pthread_kill(this->threads[i], SIGKILL);
 	}
+	
+	delete[] this->threads;
+	
+	pthread_mutex_destroy(this->queueLock);
+	delete this->queueLock;
+	
+	pthread_cond_destroy(this->hasFunction);
+	delete this->hasFunction;
+	
 }
+

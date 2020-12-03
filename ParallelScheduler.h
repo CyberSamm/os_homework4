@@ -1,28 +1,30 @@
-#pragma once
-#include <iostream>
-#include <vector>
-#include <pthread.h>
-#include <semaphore.h>
+#ifndef PARALLEL_SHEDULER_H
+#define PARALLEL_SHEDULER_H
 
+#include <pthread.h>
+#include <queue>
+#include <utility>
+
+typedef void (*scheduler_fn_t)(void*);
 
 class ParallelScheduler {
+
 private:
-	pthread_t* tid;
-	std::vector< std::pair<void(*)(void*), void*> > functions;
+	int capacity; 
+	pthread_t* threads;
+	std::queue< std::pair<scheduler_fn_t, void*> > functions;
 	
-	int N;
-	int numOfFuncs;
+	pthread_mutex_t* queueLock; // mutex
+	pthread_cond_t* hasFunction; // conditional valuable
 	
-	pthread_mutex_t my_mutex; // mutex
-	pthread_cond_t my_cond;
-	 
-	
-	//sem_t lock; // Only N funcs can work in parallel. Other funcs have to wait. 
- 	
-	static void* thread(void* arg);
+private:	
+	static void* execute(void* arg);
 	
 public:
-	ParallelScheduler(int count);
-	void run(void (*func)(void*) , void* arg);
+	ParallelScheduler(int capacity);
+	void run(scheduler_fn_t func, void* arg);
 	~ParallelScheduler();
 };
+
+#endif
+

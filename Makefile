@@ -1,13 +1,13 @@
-all: fin
+all: ParallelScheduler
 
-fin: main.o ParallelScheduler.o
-	g++ main.o ParallelScheduler.o -lpthread -o fin
+ParallelScheduler: main.o ParallelScheduler.o
+	g++ -pthread main.o ParallelScheduler.o -o ParallelScheduler
 
 main.o: main.cpp
-	g++ -c main.cpp 
+	g++ -c main.cpp -o main.o
 
 ParllelScheduler.o: ParallelScheduler.cpp
-	g++ -c ParallelScheduler.cpp
+	g++ -c ParallelScheduler.cpp -o ParallelScheduler.o
 
 clean:
-	rm -rf *.o fin
+	rm -rf *.o ParallelScheduler
